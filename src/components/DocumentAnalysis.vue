@@ -318,6 +318,7 @@ onBeforeUnmount(() => {
           <FileUpload
             :auto="false"
             :multiple="false"
+            :fileLimit="1"
             accept=".pdf,.docx,.jpg,.jpeg,.png"
             :maxFileSize="MAX_FILE_SIZE"
             :showUploadButton="false"
