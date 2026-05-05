@@ -27,7 +27,7 @@ SPA Vue 3 multi-tenant pour l'analyse de conformité Qualiopi de documents de fo
    |---|---|
    | `VITE_SUPABASE_URL` | URL du projet Supabase |
    | `VITE_SUPABASE_ANON_KEY` | Clé publique anon Supabase |
-   | `VITE_N8N_WEBHOOK_URL` | Webhook n8n par défaut. Peut être surchargé par tenant via la table `analysis_settings` (clé `webhook_url`). |
+   | `VITE_N8N_HOOK_ANALYZE_DOC` | URL du webhook n8n d'analyse (défini en dur, non surchargeable côté UI). |
 
    **Ne committez jamais le fichier `.env`.**
 

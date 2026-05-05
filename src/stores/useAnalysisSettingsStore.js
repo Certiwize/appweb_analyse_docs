@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import { supabase } from '../lib/supabase'
+import { ref, watch } from 'vue'
 import { useAuthStore } from './useAuthStore'
 
 export const DEFAULT_SYSTEM_PROMPT = `Tu es un auditeur Qualiopi expérimenté. Tu analyses des documents de formation strictement au regard du référentiel national qualité (Qualiopi).
@@ -30,126 +29,79 @@ aucune conclusion générale
 aucun contenu hors Qualiopi
 [Inclure ici les règles détaillées par type de document : Programme de formation, Règlement intérieur, Analyse du besoin, Scénario pédagogique, Organigramme, Contrat de sous-traitance, Charte qualité (5 blocs), Certificat de formation, Questionnaire de satisfaction (stagiaires/formateurs/financeurs), Autre — voir version complète fournie par le donneur d'ordre.]`
 
+export const DEFAULT_PRICE_PER_ANALYSIS = 3
+
+const PROMPT_PREFIX = 'qualiopi:system_prompt:'
+const PRICE_PREFIX = 'qualiopi:price_per_analysis:'
+
+function userKey(prefix, userId) {
+  return userId ? `${prefix}${userId}` : null
+}
+
+function readPrompt(userId) {
+  const key = userKey(PROMPT_PREFIX, userId)
+  if (!key) return DEFAULT_SYSTEM_PROMPT
+  try {
+    return localStorage.getItem(key) ?? DEFAULT_SYSTEM_PROMPT
+  } catch {
+    return DEFAULT_SYSTEM_PROMPT
+  }
+}
+
+function readPrice(userId) {
+  const key = userKey(PRICE_PREFIX, userId)
+  if (!key) return DEFAULT_PRICE_PER_ANALYSIS
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw === null) return DEFAULT_PRICE_PER_ANALYSIS
+    const n = Number(raw)
+    return Number.isFinite(n) && n >= 0 ? n : DEFAULT_PRICE_PER_ANALYSIS
+  } catch {
+    return DEFAULT_PRICE_PER_ANALYSIS
+  }
+}
+
 export const useAnalysisSettingsStore = defineStore('analysisSettings', () => {
   const auth = useAuthStore()
-  const webhookUrl = ref(import.meta.env.VITE_N8N_WEBHOOK_URL || '')
-  const systemPrompt = ref(DEFAULT_SYSTEM_PROMPT)
-  const loading = ref(false)
-  const error = ref(null)
+  const webhookUrl = ref(import.meta.env.VITE_N8N_HOOK_ANALYZE_DOC || '')
+  const systemPrompt = ref(readPrompt(auth.user?.id))
+  const pricePerAnalysis = ref(readPrice(auth.user?.id))
 
-  function orgId() {
-    const id = auth.currentOrganizationId
-    if (!id) throw new Error('Aucune organisation active.')
-    return id
+  watch(
+    () => auth.user?.id,
+    (id) => {
+      systemPrompt.value = readPrompt(id)
+      pricePerAnalysis.value = readPrice(id)
+    }
+  )
+
+  function saveSystemPrompt(text) {
+    const key = userKey(PROMPT_PREFIX, auth.user?.id)
+    if (!key) throw new Error('Utilisateur non authentifié.')
+    localStorage.setItem(key, text)
+    systemPrompt.value = text
   }
 
-  async function fetchWebhookUrl() {
-    try {
-      const { data, error: err } = await supabase
-        .from('analysis_settings')
-        .select('value')
-        .eq('organization_id', orgId())
-        .eq('key', 'webhook_url')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-      if (err) throw err
-      webhookUrl.value = data?.[0]?.value || import.meta.env.VITE_N8N_WEBHOOK_URL || ''
-    } catch (err) {
-      console.error('[settings] fetchWebhookUrl', err)
-      webhookUrl.value = import.meta.env.VITE_N8N_WEBHOOK_URL || ''
-    }
-    return webhookUrl.value
+  function resetSystemPrompt() {
+    const key = userKey(PROMPT_PREFIX, auth.user?.id)
+    if (key) localStorage.removeItem(key)
+    systemPrompt.value = DEFAULT_SYSTEM_PROMPT
   }
 
-  async function fetchSystemPrompt() {
-    try {
-      const { data, error: err } = await supabase
-        .from('analysis_settings')
-        .select('value')
-        .eq('organization_id', orgId())
-        .eq('key', 'system_prompt')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-      if (err) throw err
-      systemPrompt.value = data?.[0]?.value || DEFAULT_SYSTEM_PROMPT
-    } catch (err) {
-      console.error('[settings] fetchSystemPrompt', err)
-      systemPrompt.value = DEFAULT_SYSTEM_PROMPT
-    }
-    return systemPrompt.value
-  }
-
-  async function saveSystemPrompt(text) {
-    loading.value = true
-    error.value = null
-    try {
-      const { error: err } = await supabase.from('analysis_settings').insert({
-        organization_id: orgId(),
-        key: 'system_prompt',
-        value: text,
-        is_default: false,
-        updated_by: auth.user?.id ?? null
-      })
-      if (err) throw err
-      systemPrompt.value = text
-    } catch (err) {
-      error.value = err.message || 'Échec de l\'enregistrement du prompt.'
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function saveWebhookUrl(url) {
-    loading.value = true
-    error.value = null
-    try {
-      const { error: err } = await supabase.from('analysis_settings').insert({
-        organization_id: orgId(),
-        key: 'webhook_url',
-        value: url,
-        is_default: false,
-        updated_by: auth.user?.id ?? null
-      })
-      if (err) throw err
-      webhookUrl.value = url
-    } catch (err) {
-      error.value = err.message || 'Échec de l\'enregistrement de l\'URL.'
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function resetSystemPrompt() {
-    loading.value = true
-    error.value = null
-    try {
-      const { error: err } = await supabase
-        .from('analysis_settings')
-        .delete()
-        .eq('organization_id', orgId())
-        .eq('key', 'system_prompt')
-        .eq('is_default', false)
-      if (err) throw err
-      await fetchSystemPrompt()
-    } catch (err) {
-      error.value = err.message || 'Échec de la réinitialisation.'
-      throw err
-    } finally {
-      loading.value = false
-    }
+  function setPricePerAnalysis(value) {
+    const n = Number(value)
+    const safe = Number.isFinite(n) && n >= 0 ? n : DEFAULT_PRICE_PER_ANALYSIS
+    const key = userKey(PRICE_PREFIX, auth.user?.id)
+    if (key) localStorage.setItem(key, String(safe))
+    pricePerAnalysis.value = safe
   }
 
   return {
     webhookUrl,
     systemPrompt,
-    loading,
-    error,
-    fetchWebhookUrl,
-    fetchSystemPrompt,
+    pricePerAnalysis,
     saveSystemPrompt,
-    saveWebhookUrl,
-    resetSystemPrompt
+    resetSystemPrompt,
+    setPricePerAnalysis
   }
 })

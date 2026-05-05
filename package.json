@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
+    "@tailwindcss/typography": "^0.5.19",
+    "markdown-it": "^14.1.1",
     "pinia": "^2.2.0",
     "primeicons": "^7.0.0",
     "primevue": "^3.53.0",

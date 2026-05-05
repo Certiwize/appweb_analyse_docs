@@ -1,8 +1,35 @@
 {
+  "nav": {
+    "analysis": "Analyse Docs",
+    "history": "Historique"
+  },
+  "history": {
+    "title": "Historique des analyses",
+    "subtitle": "Vos analyses précédentes (cliquez pour ouvrir le détail).",
+    "refresh": "Actualiser",
+    "empty": "Aucune analyse enregistrée pour le moment.",
+    "col_date": "Date",
+    "col_doc_type": "Type",
+    "col_file": "Fichier",
+    "col_excerpt": "Extrait",
+    "error_load": "Impossible de charger l'historique."
+  },
+  "auth": {
+    "title": "Connexion",
+    "subtitle": "Connectez-vous avec votre compte Certigestion.",
+    "email": "Email",
+    "password": "Mot de passe",
+    "sign_in": "Se connecter",
+    "signing_in": "Connexion…",
+    "sign_out": "Déconnexion",
+    "error_generic": "Échec de la connexion. Vérifiez vos identifiants."
+  },
   "analysis": {
     "title": "Analyse Docs",
     "subtitle": "Analysez vos documents Qualiopi avec l'IA",
     "count_label": "Analyses effectuées : {n}",
+    "price_label": "Prix unitaire :",
+    "total_cost_label": "Coût total : {total} €",
     "doc_type": "Type de document",
     "select_type": "Sélectionnez un type…",
     "custom_type_label": "Nom du type personnalisé",
@@ -21,11 +48,6 @@
     "copy": "Copier",
     "result_title": "Résultat",
     "placeholder_result": "Le résultat de l'analyse apparaîtra ici.",
-    "eval_title": "Évaluation de conformité",
-    "score": "Score",
-    "admin_comment_placeholder": "Commentaire d'administrateur…",
-    "save_eval": "Enregistrer l'évaluation",
-    "eval_saved": "Évaluation enregistrée.",
     "missing_type": "type de document",
     "missing_custom_name": "nom du type personnalisé",
     "missing_file": "fichier",

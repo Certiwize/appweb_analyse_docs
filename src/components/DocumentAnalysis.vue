@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
+import MarkdownIt from 'markdown-it'
 import Dropdown from 'primevue/dropdown'
 import FileUpload from 'primevue/fileupload'
 import Button from 'primevue/button'
@@ -16,6 +17,8 @@ import { fetchWithTimeout } from '../utils/fetchWithTimeout'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useAnalysisSettingsStore } from '../stores/useAnalysisSettingsStore'
 import { useDocTypesStore } from '../stores/useDocTypesStore'
+
+const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -38,11 +41,15 @@ const resultText = ref('')
 const successMessage = ref('')
 const errorMessage = ref('')
 
-const conformityScore = ref(null)
-const adminComment = ref('')
-const lastHistoryId = ref(null)
-
 const analysisCount = ref(0)
+
+const renderedResult = computed(() => (resultText.value ? md.render(resultText.value) : ''))
+
+const totalCost = computed(() => analysisCount.value * settings.pricePerAnalysis)
+
+function onPriceChange(value) {
+  settings.setPricePerAnalysis(value)
+}
 
 const docTypeOptions = computed(() => docTypesStore.getTypesForDropdown(t))
 
@@ -62,25 +69,17 @@ const missingHint = computed(() => {
   return missing.join(' · ')
 })
 
-const scoreSeverity = computed(() => {
-  const v = conformityScore.value
-  if (v === null || v === undefined) return 'secondary'
-  if (v >= 80) return 'success'
-  if (v >= 50) return 'warn'
-  return 'danger'
-})
-
 function readableDocType() {
   if (isCustom.value) return customTypeName.value.trim()
   return selectedType.value?.name || selectedType.value?.code || ''
 }
 
 async function loadAnalysisCount() {
-  if (!auth.currentOrganizationId) return
+  if (!auth.user) return
   const { count, error } = await supabase
     .from('analysis_history')
     .select('id', { count: 'exact', head: true })
-    .eq('organization_id', auth.currentOrganizationId)
+    .eq('user_id', auth.user.id)
   if (!error) analysisCount.value = count || 0
 }
 
@@ -160,25 +159,15 @@ async function parseWebhookResponse(response) {
 }
 
 async function persistHistory({ docTypeReadable, fileName, text }) {
-  if (!auth.currentOrganizationId || !auth.user) return null
-  const { data, error } = await supabase
-    .from('analysis_history')
-    .insert({
-      organization_id: auth.currentOrganizationId,
-      user_id: auth.user.id,
-      doc_type: docTypeReadable,
-      file_name: fileName,
-      result_text: text,
-      conformity_score: null,
-      admin_comment: ''
-    })
-    .select('id')
-    .single()
-  if (error) {
-    console.error('[history] insert', error)
-    return null
-  }
-  return data?.id || null
+  if (!auth.user) return
+  const { error } = await supabase.from('analysis_history').insert({
+    user_id: auth.user.id,
+    doc_type: docTypeReadable,
+    file_name: fileName,
+    result_text: text,
+    admin_comment: ''
+  })
+  if (error) console.error('[history] insert', error)
 }
 
 async function sendDocument() {
@@ -186,18 +175,8 @@ async function sendDocument() {
   errorMessage.value = ''
   successMessage.value = ''
   resultText.value = ''
-  conformityScore.value = null
-  adminComment.value = ''
-  lastHistoryId.value = null
 
-  let webhookUrl = settings.webhookUrl
-  if (!webhookUrl) {
-    try {
-      webhookUrl = await settings.fetchWebhookUrl()
-    } catch {
-      /* fallback handled below */
-    }
-  }
+  const webhookUrl = settings.webhookUrl
   if (!webhookUrl) {
     errorMessage.value = t('analysis.error_no_webhook')
     return
@@ -224,12 +203,11 @@ async function sendDocument() {
     const text = typeof result?.text === 'string' ? result.text : JSON.stringify(result, null, 2)
     resultText.value = text
 
-    const id = await persistHistory({
+    await persistHistory({
       docTypeReadable,
       fileName: file.value.name,
       text
     })
-    lastHistoryId.value = id
     analysisCount.value += 1
     successMessage.value = t('analysis.success')
   } catch (err) {
@@ -248,24 +226,6 @@ async function copyResult() {
     successMessage.value = t('analysis.copied')
   } catch {
     errorMessage.value = t('analysis.error_copy')
-  }
-}
-
-async function saveEvaluation() {
-  if (!lastHistoryId.value) return
-  try {
-    const { error } = await supabase
-      .from('analysis_history')
-      .update({
-        conformity_score: conformityScore.value,
-        admin_comment: adminComment.value
-      })
-      .eq('id', lastHistoryId.value)
-      .eq('organization_id', auth.currentOrganizationId)
-    if (error) throw error
-    successMessage.value = t('analysis.eval_saved')
-  } catch (err) {
-    errorMessage.value = err.message || t('analysis.error_generic')
   }
 }
 
@@ -290,7 +250,27 @@ onBeforeUnmount(() => {
         <h1 class="text-2xl font-bold text-slate-900">{{ t('analysis.title') }}</h1>
         <p class="text-slate-600 mt-1">{{ t('analysis.subtitle') }}</p>
       </div>
-      <Tag :value="t('analysis.count_label', { n: analysisCount })" severity="info" />
+      <div class="flex flex-wrap items-center gap-2">
+        <Tag :value="t('analysis.count_label', { n: analysisCount })" severity="info" />
+        <div class="flex items-center gap-1 bg-white border border-slate-200 rounded-md px-2 py-1">
+          <label class="text-xs text-slate-600">{{ t('analysis.price_label') }}</label>
+          <InputNumber
+            :modelValue="settings.pricePerAnalysis"
+            @update:modelValue="onPriceChange"
+            mode="decimal"
+            :minFractionDigits="0"
+            :maxFractionDigits="2"
+            :min="0"
+            suffix=" €"
+            inputClass="!w-20 !py-0.5 !text-sm text-right"
+            :showButtons="false"
+          />
+        </div>
+        <Tag
+          :value="t('analysis.total_cost_label', { total: totalCost.toFixed(2) })"
+          severity="success"
+        />
+      </div>
     </header>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -336,8 +316,7 @@ onBeforeUnmount(() => {
             {{ t('analysis.upload_label') }}
           </label>
           <FileUpload
-            :customUpload="true"
-            :auto="true"
+            :auto="false"
             :multiple="false"
             accept=".pdf,.docx,.jpg,.jpeg,.png"
             :maxFileSize="MAX_FILE_SIZE"
@@ -402,47 +381,11 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-if="!loading && resultText" class="space-y-3">
-          <Textarea
-            :modelValue="resultText"
-            readonly
-            rows="14"
-            class="w-full font-mono text-sm"
-          />
+          <div
+            class="prose prose-slate max-w-none prose-sm prose-table:text-xs prose-th:bg-slate-100 prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1 prose-headings:text-slate-900 border border-slate-200 rounded-lg p-4 bg-slate-50 max-h-[32rem] overflow-auto"
+            v-html="renderedResult"
+          ></div>
           <Button :label="t('analysis.copy')" icon="pi pi-copy" outlined @click="copyResult" />
-
-          <div class="border-t border-slate-200 pt-4 space-y-3">
-            <h3 class="text-md font-semibold text-slate-900">{{ t('analysis.eval_title') }}</h3>
-            <div class="flex items-center gap-3">
-              <label class="text-sm text-slate-700">{{ t('analysis.score') }}</label>
-              <InputNumber
-                v-model="conformityScore"
-                :min="0"
-                :max="100"
-                showButtons
-                buttonLayout="horizontal"
-                class="w-40"
-              />
-              <Tag
-                v-if="conformityScore !== null"
-                :value="`${conformityScore}/100`"
-                :severity="scoreSeverity"
-              />
-            </div>
-            <Textarea
-              v-model="adminComment"
-              autoResize
-              rows="3"
-              class="w-full"
-              :placeholder="t('analysis.admin_comment_placeholder')"
-            />
-            <Button
-              :label="t('analysis.save_eval')"
-              icon="pi pi-save"
-              severity="success"
-              :disabled="!lastHistoryId"
-              @click="saveEvaluation"
-            />
-          </div>
         </div>
       </div>
     </div>

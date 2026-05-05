@@ -1,8 +1,35 @@
 {
+  "nav": {
+    "analysis": "Document Analysis",
+    "history": "History"
+  },
+  "history": {
+    "title": "Analysis history",
+    "subtitle": "Your previous analyses (click to open details).",
+    "refresh": "Refresh",
+    "empty": "No analysis recorded yet.",
+    "col_date": "Date",
+    "col_doc_type": "Type",
+    "col_file": "File",
+    "col_excerpt": "Excerpt",
+    "error_load": "Failed to load history."
+  },
+  "auth": {
+    "title": "Sign in",
+    "subtitle": "Sign in with your Certigestion account.",
+    "email": "Email",
+    "password": "Password",
+    "sign_in": "Sign in",
+    "signing_in": "Signing in…",
+    "sign_out": "Sign out",
+    "error_generic": "Sign in failed. Check your credentials."
+  },
   "analysis": {
     "title": "Document Analysis",
     "subtitle": "Analyze your Qualiopi documents with AI",
     "count_label": "Analyses performed: {n}",
+    "price_label": "Unit price:",
+    "total_cost_label": "Total cost: {total} €",
     "doc_type": "Document type",
     "select_type": "Select a type…",
     "custom_type_label": "Custom type name",
@@ -21,11 +48,6 @@
     "copy": "Copy",
     "result_title": "Result",
     "placeholder_result": "The analysis result will appear here.",
-    "eval_title": "Conformity evaluation",
-    "score": "Score",
-    "admin_comment_placeholder": "Administrator comment…",
-    "save_eval": "Save evaluation",
-    "eval_saved": "Evaluation saved.",
     "missing_type": "document type",
     "missing_custom_name": "custom type name",
     "missing_file": "file",
