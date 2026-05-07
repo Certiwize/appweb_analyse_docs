@@ -3,7 +3,6 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownIt from 'markdown-it'
 import Dropdown from 'primevue/dropdown'
-import FileUpload from 'primevue/fileupload'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Textarea from 'primevue/textarea'
@@ -83,8 +82,31 @@ async function loadAnalysisCount() {
   if (!error) analysisCount.value = count || 0
 }
 
-function onFileSelect(event) {
-  const f = event.files?.[0]
+const fileInputRef = ref(null)
+const isDragging = ref(false)
+
+const FILE_META = {
+  pdf:  { icon: 'pi-file-pdf',  color: 'text-red-500',    bg: 'bg-red-50' },
+  docx: { icon: 'pi-file-word', color: 'text-blue-500',   bg: 'bg-blue-50' },
+  doc:  { icon: 'pi-file-word', color: 'text-blue-500',   bg: 'bg-blue-50' },
+  jpg:  { icon: 'pi-image',     color: 'text-violet-500', bg: 'bg-violet-50' },
+  jpeg: { icon: 'pi-image',     color: 'text-violet-500', bg: 'bg-violet-50' },
+  png:  { icon: 'pi-image',     color: 'text-violet-500', bg: 'bg-violet-50' }
+}
+
+function getFileMeta(name) {
+  const ext = name?.split('.').pop()?.toLowerCase()
+  return FILE_META[ext] || { icon: 'pi-file', color: 'text-slate-500', bg: 'bg-slate-100' }
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '0 o'
+  if (bytes < 1024) return `${bytes} o`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
+  return `${(bytes / 1024 / 1024).toFixed(2)} Mo`
+}
+
+function acceptFile(f) {
   if (!f) return
   const ext = f.name.split('.').pop()?.toLowerCase()
   if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
@@ -101,8 +123,22 @@ function onFileSelect(event) {
   file.value = f
 }
 
+function onFileInputChange(event) {
+  acceptFile(event.target.files?.[0])
+  event.target.value = ''
+}
+
+function onDrop(event) {
+  isDragging.value = false
+  acceptFile(event.dataTransfer?.files?.[0])
+}
+
 function onFileClear() {
   file.value = null
+}
+
+function triggerFilePicker() {
+  fileInputRef.value?.click()
 }
 
 function startProgress() {
@@ -315,26 +351,59 @@ onBeforeUnmount(() => {
           <label class="block text-sm font-medium text-slate-700 mb-2">
             {{ t('analysis.upload_label') }}
           </label>
-          <FileUpload
-            :auto="false"
-            :multiple="false"
-            :fileLimit="1"
+          <input
+            ref="fileInputRef"
+            type="file"
             accept=".pdf,.docx,.jpg,.jpeg,.png"
-            :maxFileSize="MAX_FILE_SIZE"
-            :showUploadButton="false"
-            :showCancelButton="false"
-            :chooseLabel="t('analysis.choose_drop')"
-            @select="onFileSelect"
-            @clear="onFileClear"
-            @remove="onFileClear"
+            class="hidden"
+            :disabled="loading"
+            @change="onFileInputChange"
+          />
+
+          <button
+            v-if="!file"
+            type="button"
+            @click="triggerFilePicker"
+            @dragover.prevent="isDragging = true"
+            @dragleave.prevent="isDragging = false"
+            @drop.prevent="onDrop"
+            :disabled="loading"
+            :class="[
+              'flex flex-col items-center justify-center py-8 px-4 w-full border-2 border-dashed rounded-lg cursor-pointer transition-colors',
+              isDragging
+                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                : 'border-slate-300 bg-slate-50 text-slate-500 hover:border-blue-400 hover:bg-blue-50/40',
+              loading && 'opacity-50 cursor-not-allowed'
+            ]"
           >
-            <template #empty>
-              <div class="flex flex-col items-center justify-center py-8 text-slate-500">
-                <i class="pi pi-cloud-upload text-4xl mb-2"></i>
-                <p>{{ t('analysis.drop_text') }}</p>
-              </div>
-            </template>
-          </FileUpload>
+            <i class="pi pi-cloud-upload text-4xl mb-2"></i>
+            <p class="font-medium">{{ t('analysis.drop_text') }}</p>
+            <p class="text-xs text-slate-400 mt-1">PDF, DOCX, JPG, PNG &middot; 10 Mo max</p>
+          </button>
+
+          <div
+            v-else
+            class="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg"
+          >
+            <div :class="[getFileMeta(file.name).bg, 'w-12 h-12 rounded-lg flex items-center justify-center shrink-0']">
+              <i :class="['pi', getFileMeta(file.name).icon, getFileMeta(file.name).color, 'text-2xl']"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-slate-900 truncate" :title="file.name">{{ file.name }}</p>
+              <p class="text-xs text-slate-500 mt-0.5">{{ formatFileSize(file.size) }}</p>
+            </div>
+            <Tag value="Prêt" severity="success" icon="pi pi-check" />
+            <button
+              type="button"
+              :disabled="loading"
+              @click="onFileClear"
+              class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :title="`Retirer ${file.name}`"
+              :aria-label="`Retirer ${file.name}`"
+            >
+              <i class="pi pi-times text-sm"></i>
+            </button>
+          </div>
         </div>
 
         <div>
